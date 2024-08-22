@@ -366,6 +366,16 @@ class CondaEnvRunner(PythonRun):
         env.append("*CONDA*")
         return env
 
+    def python_spec_for_path(cls, path: Path) -> PythonSpec:
+        """
+        Get the spec for an absolute path to a Python executable.
+
+        :param path: the path investigated
+        :return: the found spec
+        """
+
+        return PythonSpec.from_string_spec(path)
+
     def env_site_package_dir(self) -> Path:
         """The site package folder within the tox environment."""
         script = 'from sysconfig import get_paths; print(get_paths()["purelib"])'
