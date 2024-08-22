@@ -22,11 +22,15 @@ from tox.execute.api import (
     SyncWrite,
 )
 from tox.execute.local_sub_process import LocalSubProcessExecuteInstance, LocalSubProcessExecutor
+from tox.tox_env.api import ToxEnv
 from tox.tox_env.errors import Fail
+from tox.tox_env.info import Info
 from tox.tox_env.installer import Installer
 from tox.tox_env.python.api import PythonInfo, VersionInfo
 from tox.tox_env.python.pip.pip_install import Pip
 from tox.tox_env.python.runner import PythonRun
+from tox_conda.FilteredInfo import FilteredInfo
+from virtualenv.discovery.py_spec import PythonSpec
 
 if TYPE_CHECKING:
     from tox.tox_env.api import ToxEnvCreateArgs
@@ -49,6 +53,12 @@ class CondaEnvRunner(PythonRun):
         self._executor = None
         self._external_executor = None
         self._created = False
+        self._ignore_env_name_mismatch = True
+        ignore_env_name_mismatch = [
+            o for o in create_args.options.override if o.key == "ignore_env_name_mismatch"
+        ]
+        if len(ignore_env_name_mismatch) > 0 and ignore_env_name_mismatch[0].value == "False":
+            self._ignore_env_name_mismatch = False
         super().__init__(create_args)
 
     @staticmethod
@@ -94,6 +104,17 @@ class CondaEnvRunner(PythonRun):
         extra = {"executable_path": exe_path}
 
         return PythonInfo(implementation, version_info, version, is_64, platform_name, extra)
+
+    @property
+    def cache(self) -> Info:
+        """Return a modified Info class that does NOT pass "name" key to `Info.compare`."""
+        if self._ignore_env_name_mismatch:
+            return FilteredInfo(
+                self.env_dir,
+                filter_keys=["name"],
+                filter_section=ToxEnv.__name__,
+            )
+        return Info(self.env_dir)
 
     @property
     def _package_tox_env_type(self) -> str:
@@ -184,9 +205,7 @@ class CondaEnvRunner(PythonRun):
             conda_dict["create_args"] = conda_create_args
 
         base = super().python_cache()
-        base.update(
-            {"conda": conda_dict},
-        )
+        base.update({"conda": conda_dict},)
         return base
 
     def create_python_env(self) -> None:
@@ -300,7 +319,9 @@ class CondaEnvRunner(PythonRun):
 
     @property
     def external_executor(self) -> Execute:
+
         class CondaExecutor(LocalSubProcessExecutor):
+
             def build_instance(
                 self,
                 request: ExecuteRequest,
@@ -316,6 +337,7 @@ class CondaEnvRunner(PythonRun):
 
     @property
     def executor(self) -> Execute:
+
         def get_conda_command_prefix():
             conda_exe = find_conda()
             cache_conf = self.python_cache()
@@ -326,6 +348,7 @@ class CondaEnvRunner(PythonRun):
             return shlex.split(cmd)
 
         class CondaExecutor(LocalSubProcessExecutor):
+
             def build_instance(
                 self,
                 request: ExecuteRequest,
@@ -423,7 +446,9 @@ class CondaEnvRunner(PythonRun):
         return self._call_executor(self.external_executor, request)
 
     def _call_executor(self, executor: Execute, request: ExecuteRequest):
+
         class NamedBytesIO(BytesIO):
+
             def __init__(self, name):
                 self.name = name
                 super().__init__()
@@ -494,7 +519,7 @@ def find_conda() -> Path:
 
 
 def hash_file(file: Path) -> str:
-    with open(file.name, "rb") as f:
+    with open(file, "rb") as f:
         sha1 = hashlib.sha1()
         sha1.update(f.read())
         return sha1.hexdigest()
